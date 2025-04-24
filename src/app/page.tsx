@@ -13,6 +13,7 @@ const Whiteboard = () => {
   const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line'>('pencil');
   const [brushSize, setBrushSize] = useState(5);
   const [drawing, setDrawing] = useState(false);
+  const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null);
   const [drawingData, setDrawingData] = useState<DrawingCoordinates[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasImageRef = useRef<HTMLImageElement>(null);
@@ -41,30 +42,56 @@ const Whiteboard = () => {
   const startDrawing = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setDrawing(true);
     const { offsetX, offsetY } = event.nativeEvent;
+    setStartPosition({ x: offsetX, y: offsetY });
     setDrawingData([{ x: offsetX, y: offsetY }]);
   };
 
   const draw = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!drawing || !canvasContext) return;
+    if (!drawing || !canvasContext || !startPosition) return;
 
     const { offsetX, offsetY } = event.nativeEvent;
-    const newDrawingData = [...drawingData, { x: offsetX, y: offsetY }];
-    setDrawingData(newDrawingData);
 
     canvasContext.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-
     canvasContext.lineWidth = brushSize;
 
-    canvasContext.beginPath();
-    canvasContext.moveTo(drawingData[0].x, drawingData[0].y);
-    newDrawingData.forEach((point, index) => {
-      canvasContext.lineTo(point.x, point.y);
-    });
-    canvasContext.stroke();
+    switch (selectedTool) {
+      case 'pencil':
+        const newDrawingData = [...drawingData, { x: offsetX, y: offsetY }];
+        setDrawingData(newDrawingData);
+
+        canvasContext.beginPath();
+        canvasContext.moveTo(drawingData[0].x, drawingData[0].y);
+        newDrawingData.forEach((point, index) => {
+          canvasContext.lineTo(point.x, point.y);
+        });
+        canvasContext.stroke();
+        break;
+      case 'rectangle':
+        const rectWidth = offsetX - startPosition.x;
+        const rectHeight = offsetY - startPosition.y;
+        canvasContext.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
+        break;
+      case 'circle':
+        const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
+        canvasContext.beginPath();
+        canvasContext.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
+        canvasContext.stroke();
+        break;
+      case 'line':
+        canvasContext.beginPath();
+        canvasContext.moveTo(startPosition.x, startPosition.y);
+        canvasContext.lineTo(offsetX, offsetY);
+        canvasContext.stroke();
+        break;
+      default:
+        break;
+    }
   };
 
   const endDrawing = () => {
     setDrawing(false);
+    setStartPosition(null);
+    setDrawingData([]);
   };
 
   const downloadDrawing = () => {
