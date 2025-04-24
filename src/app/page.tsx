@@ -17,19 +17,34 @@ const Whiteboard = () => {
   const [drawingData, setDrawingData] = useState<DrawingCoordinates[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasImageRef = useRef<HTMLImageElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState(0);
+  const [canvasHeight, setCanvasHeight] = useState(0);
   const [canvasContext, setCanvasContext] = useState<CanvasRenderingContext2D | null>(null);
 
   useEffect(() => {
-    if (canvasRef.current) {
+    const updateCanvasDimensions = () => {
+      setCanvasWidth(window.innerWidth);
+      setCanvasHeight(window.innerHeight - 50);
+    };
+
+    if (typeof window !== 'undefined') {
+      updateCanvasDimensions();
+      window.addEventListener('resize', updateCanvasDimensions);
+      return () => window.removeEventListener('resize', updateCanvasDimensions);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canvasRef.current && canvasWidth && canvasHeight) {
       const context = canvasRef.current.getContext('2d');
       if (context) {
         setCanvasContext(context);
         context.lineCap = 'round';
         context.fillStyle = 'white';
-        context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        context.fillRect(0, 0, canvasWidth, canvasHeight);
       }
     }
-  }, []);
+  }, [canvasWidth, canvasHeight]);
 
   const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line') => {
     setSelectedTool(tool);
@@ -148,8 +163,8 @@ const Whiteboard = () => {
       </div>
       <canvas
         ref={canvasRef}
-        width={typeof window !== 'undefined' ? window.innerWidth : 0}
-        height={typeof window !== 'undefined' ? window.innerHeight - 50 : 0}
+        width={canvasWidth}
+        height={canvasHeight}
         className="bg-background cursor-pointer"
         onMouseDown={startDrawing}
         onMouseMove={draw}
