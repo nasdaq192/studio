@@ -17,13 +17,13 @@ const Whiteboard = () => {
   const [brushSize, setBrushSize] = useState(5);
   const [drawing, setDrawing] = useState(false);
   const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null);
-  const [drawingData, setDrawingData] = useState<DrawingCoordinates[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [canvasHeight, setCanvasHeight] = useState(0);
   const [canvasContext, setCanvasContext] = useState<CanvasRenderingContext2D | null>(null);
   const [drawingColor, setDrawingColor] = useState<string>('#000000'); // Default color black
-  const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [drawingHistory, setDrawingHistory] = useState<string[]>([]); // Stores canvas snapshots
+
 
   useEffect(() => {
     const updateCanvasDimensions = () => {
@@ -46,9 +46,16 @@ const Whiteboard = () => {
         context.lineCap = 'round';
         context.fillStyle = 'white';
         context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        // Load previous drawings from history
+        drawingHistory.forEach(data => {
+          const img = new Image();
+          img.src = data;
+          img.onload = () => context.drawImage(img, 0, 0);
+        });
       }
     }
-  }, [canvasWidth, canvasHeight]);
+  }, [canvasWidth, canvasHeight, drawingHistory]);
 
   const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser') => {
     setSelectedTool(tool);
@@ -62,10 +69,11 @@ const Whiteboard = () => {
     setDrawing(true);
     const { offsetX, offsetY } = event.nativeEvent;
     setStartPosition({ x: offsetX, y: offsetY });
-    setDrawingData([{ x: offsetX, y: offsetY }]);
-
-    if (canvasRef.current) {
-      setSnapshot(canvasRef.current.toDataURL());
+    if (canvasRef.current && canvasContext) {
+      canvasContext.beginPath();
+      canvasContext.lineWidth = brushSize;
+      canvasContext.strokeStyle = drawingColor;
+      canvasContext.moveTo(offsetX, offsetY);
     }
   };
 
@@ -74,96 +82,35 @@ const Whiteboard = () => {
 
     const { offsetX, offsetY } = event.nativeEvent;
 
-    if (canvasRef.current) {
-          const context = canvasRef.current.getContext('2d');
-          if(context) {
-            context.lineWidth = brushSize;
-            context.strokeStyle = drawingColor;
-
-            context.beginPath();
-            switch (selectedTool) {
-              case 'pencil':
-                context.lineTo(offsetX, offsetY);
-                context.stroke();
-                setDrawingData([...drawingData, { x: offsetX, y: offsetY }]);
-                break;
-              case 'rectangle':
-                context.clearRect(0, 0, canvasWidth, canvasHeight);
-                if (snapshot) {
-                    const img = new Image();
-                    img.src = snapshot;
-                    img.onload = () => {
-                        context.drawImage(img, 0, 0);
-                        const rectWidth = offsetX - startPosition.x;
-                        const rectHeight = offsetY - startPosition.y;
-                        context.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
-                    };
-                } else {
-                  const rectWidth = offsetX - startPosition.x;
-                  const rectHeight = offsetY - startPosition.y;
-                  context.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
-                }
-                break;
-              case 'circle':
-                context.clearRect(0, 0, canvasWidth, canvasHeight);
-                if (snapshot) {
-                  const img = new Image();
-                  img.src = snapshot;
-                  img.onload = () => {
-                      context.drawImage(img, 0, 0);
-                      const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
-                      context.beginPath();
-                      context.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
-                      context.stroke();
-                  };
-                } else {
-                  const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
-                  context.beginPath();
-                  context.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
-                  context.stroke();
-                }
-                break;
-              case 'line':
-                context.clearRect(0, 0, canvasWidth, canvasHeight);
-                if (snapshot) {
-                    const img = new Image();
-                    img.src = snapshot;
-                    img.onload = () => {
-                        context.drawImage(img, 0, 0);
-                        context.beginPath();
-                        context.moveTo(startPosition.x, startPosition.y);
-                        context.lineTo(offsetX, offsetY);
-                        context.stroke();
-                    };
-                } else {
-                  context.beginPath();
-                  context.moveTo(startPosition.x, startPosition.y);
-                  context.lineTo(offsetX, offsetY);
-                  context.stroke();
-                }
-                break;
-              case 'eraser':
-                context.clearRect(offsetX - brushSize / 2, offsetY - brushSize / 2, brushSize, brushSize);
-                break;
-              default:
-                break;
-            }
-        context.closePath();
-      }
+    switch (selectedTool) {
+      case 'pencil':
+        canvasContext.lineTo(offsetX, offsetY);
+        canvasContext.stroke();
+        break;
+      case 'rectangle':
+        // Not implemented
+        break;
+      case 'circle':
+        // Not implemented
+        break;
+      case 'line':
+        // Not implemented
+        break;
+      case 'eraser':
+          canvasContext.globalCompositeOperation = 'destination-out';
+          canvasContext.fillRect(offsetX - brushSize / 2, offsetY - brushSize / 2, brushSize, brushSize);
+          break;
+      default:
+        break;
     }
   };
 
   const endDrawing = () => {
+    if (!canvasRef.current || !canvasContext) return;
     setDrawing(false);
     setStartPosition(null);
-    setSnapshot(canvasRef.current?.toDataURL() || null);
-    if (canvasRef.current) {
-      const context = canvasRef.current.getContext('2d');
-      if(context){
-        setDrawingData([]);
-      }
-
-    }
+    canvasContext.globalCompositeOperation = 'source-over'; // Reset composite operation
+    setDrawingHistory(prev => [...prev, canvasRef.current!.toDataURL()]);
   };
 
   const downloadDrawing = () => {
@@ -271,7 +218,6 @@ const Whiteboard = () => {
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
-        style={{ backgroundImage: `url(${snapshot})`, backgroundSize: 'cover' }}
         className="bg-background cursor-pointer"
         onMouseDown={startDrawing}
         onMouseMove={draw}
