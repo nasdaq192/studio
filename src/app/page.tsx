@@ -2,7 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { RectangleVertical, Circle, Pencil, Download } from 'lucide-react';
+import { RectangleVertical, Circle, Pencil, Download, Eraser } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface DrawingCoordinates {
   x: number;
@@ -10,16 +13,17 @@ interface DrawingCoordinates {
 }
 
 const Whiteboard = () => {
-  const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line'>('pencil');
+  const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser'>('pencil');
   const [brushSize, setBrushSize] = useState(5);
   const [drawing, setDrawing] = useState(false);
   const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null);
   const [drawingData, setDrawingData] = useState<DrawingCoordinates[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const canvasImageRef = useRef<HTMLImageElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [canvasHeight, setCanvasHeight] = useState(0);
   const [canvasContext, setCanvasContext] = useState<CanvasRenderingContext2D | null>(null);
+  const [drawingColor, setDrawingColor] = useState<string>('#000000'); // Default color black
+  const [snapshot, setSnapshot] = useState<string | null>(null);
 
   useEffect(() => {
     const updateCanvasDimensions = () => {
@@ -46,7 +50,7 @@ const Whiteboard = () => {
     }
   }, [canvasWidth, canvasHeight]);
 
-  const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line') => {
+  const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser') => {
     setSelectedTool(tool);
   };
 
@@ -59,6 +63,10 @@ const Whiteboard = () => {
     const { offsetX, offsetY } = event.nativeEvent;
     setStartPosition({ x: offsetX, y: offsetY });
     setDrawingData([{ x: offsetX, y: offsetY }]);
+
+    if (canvasRef.current) {
+      setSnapshot(canvasRef.current.toDataURL());
+    }
   };
 
   const draw = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -66,40 +74,96 @@ const Whiteboard = () => {
 
     const { offsetX, offsetY } = event.nativeEvent;
 
-    canvasContext.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-    canvasContext.lineWidth = brushSize;
+    if (canvasRef.current) {
+          const context = canvasRef.current.getContext('2d');
+          if(context) {
+            if (snapshot) {
+                const img = new Image();
+                img.src = snapshot;
+                img.onload = () => {
+                    context.clearRect(0, 0, canvasWidth, canvasHeight);
+                    context.drawImage(img, 0, 0);
+                    context.lineWidth = brushSize;
+                    context.strokeStyle = drawingColor;
 
-    switch (selectedTool) {
-      case 'pencil':
-        const newDrawingData = [...drawingData, { x: offsetX, y: offsetY }];
-        setDrawingData(newDrawingData);
+                    switch (selectedTool) {
+                      case 'pencil':
+                        const newDrawingData = [...drawingData, { x: offsetX, y: offsetY }];
+                        setDrawingData(newDrawingData);
 
-        canvasContext.beginPath();
-        canvasContext.moveTo(drawingData[0].x, drawingData[0].y);
-        newDrawingData.forEach((point, index) => {
-          canvasContext.lineTo(point.x, point.y);
-        });
-        canvasContext.stroke();
-        break;
-      case 'rectangle':
-        const rectWidth = offsetX - startPosition.x;
-        const rectHeight = offsetY - startPosition.y;
-        canvasContext.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
-        break;
-      case 'circle':
-        const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
-        canvasContext.beginPath();
-        canvasContext.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
-        canvasContext.stroke();
-        break;
-      case 'line':
-        canvasContext.beginPath();
-        canvasContext.moveTo(startPosition.x, startPosition.y);
-        canvasContext.lineTo(offsetX, offsetY);
-        canvasContext.stroke();
-        break;
-      default:
-        break;
+                        context.beginPath();
+                        context.moveTo(startPosition.x, startPosition.y);
+                        newDrawingData.forEach((point) => {
+                          context.lineTo(point.x, point.y);
+                          context.stroke();
+                        });
+                        break;
+                      case 'rectangle':
+                        const rectWidth = offsetX - startPosition.x;
+                        const rectHeight = offsetY - startPosition.y;
+                        context.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
+                        break;
+                      case 'circle':
+                        const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
+                        context.beginPath();
+                        context.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
+                        context.stroke();
+                        break;
+                      case 'line':
+                        context.beginPath();
+                        context.moveTo(startPosition.x, startPosition.y);
+                        context.lineTo(offsetX, offsetY);
+                        context.stroke();
+                        break;
+                      case 'eraser':
+                        context.clearRect(offsetX - brushSize / 2, offsetY - brushSize / 2, brushSize, brushSize);
+                        break;
+                      default:
+                        break;
+                    }
+                };
+            } else {
+                context.clearRect(0, 0, canvasWidth, canvasHeight);
+                context.lineWidth = brushSize;
+                context.strokeStyle = drawingColor;
+
+                switch (selectedTool) {
+                  case 'pencil':
+                    const newDrawingData = [...drawingData, { x: offsetX, y: offsetY }];
+                    setDrawingData(newDrawingData);
+
+                    context.beginPath();
+                    context.moveTo(startPosition.x, startPosition.y);
+                    newDrawingData.forEach((point) => {
+                      context.lineTo(point.x, point.y);
+                      context.stroke();
+                    });
+                    break;
+                  case 'rectangle':
+                    const rectWidth = offsetX - startPosition.x;
+                    const rectHeight = offsetY - startPosition.y;
+                    context.strokeRect(startPosition.x, startPosition.y, rectWidth, rectHeight);
+                    break;
+                  case 'circle':
+                    const radius = Math.sqrt(Math.pow(offsetX - startPosition.x, 2) + Math.pow(offsetY - startPosition.y, 2));
+                    context.beginPath();
+                    context.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
+                    context.stroke();
+                    break;
+                  case 'line':
+                    context.beginPath();
+                    context.moveTo(startPosition.x, startPosition.y);
+                    context.lineTo(offsetX, offsetY);
+                    context.stroke();
+                    break;
+                  case 'eraser':
+                    context.clearRect(offsetX - brushSize / 2, offsetY - brushSize / 2, brushSize, brushSize);
+                    break;
+                  default:
+                    break;
+                }
+            }
+        }
     }
   };
 
@@ -107,6 +171,7 @@ const Whiteboard = () => {
     setDrawing(false);
     setStartPosition(null);
     setDrawingData([]);
+    setSnapshot(canvasRef.current?.toDataURL() || null);
   };
 
   const downloadDrawing = () => {
@@ -118,6 +183,10 @@ const Whiteboard = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleColorChange = (color: string) => {
+    setDrawingColor(color);
   };
 
   return (
@@ -148,6 +217,9 @@ const Whiteboard = () => {
               <line x1="5" x2="19" y1="12" y2="12" />
             </svg>
         </Button>
+        <Button variant={selectedTool === 'eraser' ? 'default' : 'outline'} onClick={() => handleToolChange('eraser')}>
+          <Eraser className="h-5 w-5" />
+        </Button>
         <input
           type="range"
           min="1"
@@ -156,6 +228,48 @@ const Whiteboard = () => {
           onChange={handleBrushSizeChange}
           className="ml-4"
         />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="ml-4">
+              Color
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <h4 className="font-medium leading-none">
+                  Select Drawing Color
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Choose a color to draw with.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center">
+                  <Label htmlFor="color" className="text-right">
+                    Hex Value:
+                  </Label>
+                  <Input
+                    id="color"
+                    value={drawingColor}
+                    onChange={(e) => handleColorChange(e.target.value)}
+                    className="ml-2 w-40"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#000000' }} onClick={() => handleColorChange('#000000')}>Black</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FF0000' }} onClick={() => handleColorChange('#FF0000')}>Red</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#00FF00' }} onClick={() => handleColorChange('#00FF00')}>Green</Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#0000FF' }} onClick={() => handleColorChange('#0000FF')}>Blue</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FFFFFF', color: '#000' }} onClick={() => handleColorChange('#FFFFFF')}>White</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FFFF00' }} onClick={() => handleColorChange('#FFFF00')}>Yellow</Button>
+                </div>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Button variant="outline" className="ml-auto" onClick={downloadDrawing}>
           <Download className="h-5 w-5 mr-2" />
           Export
@@ -165,6 +279,7 @@ const Whiteboard = () => {
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
+        style={{ background: `url(${snapshot})`, backgroundSize: 'cover' }}
         className="bg-background cursor-pointer"
         onMouseDown={startDrawing}
         onMouseMove={draw}
