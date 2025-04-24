@@ -16,7 +16,7 @@ const Whiteboard = () => {
   const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser'>('pencil');
   const [brushSize, setBrushSize] = useState(5);
   const [drawing, setDrawing] = useState(false);
-  const [startPosition, setStartPosition] = useState<{ x: number; y: number } | null>(null);
+  const [currentPath, setCurrentPath] = useState<DrawingCoordinates[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [canvasHeight, setCanvasHeight] = useState(0);
@@ -44,6 +44,7 @@ const Whiteboard = () => {
       if (context) {
         setCanvasContext(context);
         context.lineCap = 'round';
+        context.lineJoin = 'round';
         context.fillStyle = 'white';
         context.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -68,49 +69,45 @@ const Whiteboard = () => {
   const startDrawing = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setDrawing(true);
     const { offsetX, offsetY } = event.nativeEvent;
-    setStartPosition({ x: offsetX, y: offsetY });
+    setCurrentPath([{ x: offsetX, y: offsetY }]);
+
     if (canvasRef.current && canvasContext) {
       canvasContext.beginPath();
       canvasContext.lineWidth = brushSize;
       canvasContext.strokeStyle = drawingColor;
       canvasContext.moveTo(offsetX, offsetY);
+
+      if (selectedTool === 'eraser') {
+        canvasContext.globalCompositeOperation = 'destination-out';
+      } else {
+        canvasContext.globalCompositeOperation = 'source-over';
+      }
     }
   };
 
   const draw = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!drawing || !canvasContext || !startPosition) return;
+    if (!drawing || !canvasContext) return;
 
     const { offsetX, offsetY } = event.nativeEvent;
+    const newPoint = { x: offsetX, y: offsetY };
 
-    switch (selectedTool) {
-      case 'pencil':
+    if (selectedTool === 'pencil' || selectedTool === 'eraser') {
+      if (canvasContext) {
         canvasContext.lineTo(offsetX, offsetY);
         canvasContext.stroke();
-        break;
-      case 'rectangle':
-        // Not implemented
-        break;
-      case 'circle':
-        // Not implemented
-        break;
-      case 'line':
-        // Not implemented
-        break;
-      case 'eraser':
-          canvasContext.globalCompositeOperation = 'destination-out';
-          canvasContext.fillRect(offsetX - brushSize / 2, offsetY - brushSize / 2, brushSize, brushSize);
-          break;
-      default:
-        break;
+        setCurrentPath(prevPath => [...prevPath, newPoint]);
+      }
     }
   };
+
 
   const endDrawing = () => {
     if (!canvasRef.current || !canvasContext) return;
     setDrawing(false);
-    setStartPosition(null);
-    canvasContext.globalCompositeOperation = 'source-over'; // Reset composite operation
-    setDrawingHistory(prev => [...prev, canvasRef.current!.toDataURL()]);
+    if (currentPath.length > 0) {
+      setDrawingHistory(prev => [...prev, canvasRef.current!.toDataURL()]);
+      setCurrentPath([]);
+    }
   };
 
   const downloadDrawing = () => {
@@ -196,14 +193,14 @@ const Whiteboard = () => {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#000000' }} onClick={() => handleColorChange('#000000')}>Black</Button>
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FF0000' }} onClick={() => handleColorChange('#FF0000')}>Red</Button>
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#00FF00' }} onClick={() => handleColorChange('#00FF00')}>Green</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#000000' ? 'hsl(var(--primary))' : '#000000', color: drawingColor === '#000000' ? 'hsl(var(--primary-foreground))' : 'inherit' } as React.CSSProperties} onClick={() => handleColorChange('#000000')}>Black</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#FF0000' ? 'hsl(var(--primary))' : '#FF0000', color: drawingColor === '#FF0000' ? 'hsl(var(--primary-foreground))' : 'inherit' } as React.CSSProperties} onClick={() => handleColorChange('#FF0000')}>Red</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#00FF00' ? 'hsl(var(--primary))' : '#00FF00', color: drawingColor === '#00FF00' ? 'hsl(var(--primary-foreground))' : 'inherit' } as React.CSSProperties} onClick={() => handleColorChange('#00FF00')}>Green</Button>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#0000FF' }} onClick={() => handleColorChange('#0000FF')}>Blue</Button>
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FFFFFF', color: '#000' }} onClick={() => handleColorChange('#FFFFFF')}>White</Button>
-                  <Button variant="outline" className="w-20" style={{ backgroundColor: '#FFFF00' }} onClick={() => handleColorChange('#FFFF00')}>Yellow</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#0000FF' ? 'hsl(var(--primary))' : '#0000FF', color: drawingColor === '#0000FF' ? 'hsl(var(--primary-foreground))' : 'inherit' } as React.CSSProperties} onClick={() => handleColorChange('#0000FF')}>Blue</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#FFFFFF' ? 'hsl(var(--primary))' : '#FFFFFF', color: drawingColor === '#FFFFFF' ? 'hsl(var(--primary-foreground))' : '#000' } as React.CSSProperties} onClick={() => handleColorChange('#FFFFFF')}>White</Button>
+                  <Button variant="outline" className="w-20" style={{ backgroundColor: drawingColor === '#FFFF00' ? 'hsl(var(--primary))' : '#FFFF00', color: drawingColor === '#FFFF00' ? 'hsl(var(--primary-foreground))' : 'inherit' } as React.CSSProperties} onClick={() => handleColorChange('#FFFF00')}>Yellow</Button>
                 </div>
               </div>
             </div>
@@ -218,6 +215,7 @@ const Whiteboard = () => {
         ref={canvasRef}
         width={canvasWidth}
         height={canvasHeight}
+        style={{ background: 'white' }}
         className="bg-background cursor-pointer"
         onMouseDown={startDrawing}
         onMouseMove={draw}
