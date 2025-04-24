@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { RectangleVertical, Circle, Pencil, Download, Eraser } from 'lucide-react';
+import { RectangleVertical, Circle as CircleIcon, Pencil, Download, Eraser } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ interface DrawingCoordinates {
 }
 
 const Whiteboard = () => {
-  const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser'>('pencil');
+  const [selectedTool, setSelectedTool] = useState<'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser' | 'fill'>('pencil');
   const [brushSize, setBrushSize] = useState(5);
   const [drawing, setDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<DrawingCoordinates[]>([]);
@@ -23,7 +23,8 @@ const Whiteboard = () => {
   const [canvasContext, setCanvasContext] = useState<CanvasRenderingContext2D | null>(null);
   const [drawingColor, setDrawingColor] = useState<string>('#000000'); // Default color black
   const [drawingHistory, setDrawingHistory] = useState<string[]>([]); // Stores canvas snapshots
-
+  const startX = useRef<number>(0);
+  const startY = useRef<number>(0);
 
   useEffect(() => {
     const updateCanvasDimensions = () => {
@@ -58,7 +59,7 @@ const Whiteboard = () => {
     }
   }, [canvasWidth, canvasHeight, drawingHistory]);
 
-  const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser') => {
+  const handleToolChange = (tool: 'pencil' | 'rectangle' | 'circle' | 'line' | 'eraser' | 'fill') => {
     setSelectedTool(tool);
   };
 
@@ -69,12 +70,15 @@ const Whiteboard = () => {
   const startDrawing = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setDrawing(true);
     const { offsetX, offsetY } = event.nativeEvent;
+    startX.current = offsetX;
+    startY.current = offsetY;
     setCurrentPath([{ x: offsetX, y: offsetY }]);
 
     if (canvasRef.current && canvasContext) {
       canvasContext.beginPath();
       canvasContext.lineWidth = brushSize;
       canvasContext.strokeStyle = drawingColor;
+      canvasContext.fillStyle = drawingColor;
       canvasContext.moveTo(offsetX, offsetY);
 
       if (selectedTool === 'eraser') {
@@ -101,10 +105,26 @@ const Whiteboard = () => {
   };
 
 
-  const endDrawing = () => {
+  const endDrawing = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !canvasContext) return;
     setDrawing(false);
     if (currentPath.length > 0) {
+      const { offsetX, offsetY } = event.nativeEvent;
+      if (canvasContext) {
+        if (selectedTool === 'rectangle') {
+          canvasContext.rect(startX.current, startY.current, offsetX - startX.current, offsetY - startY.current);
+          canvasContext.stroke();
+        } else if (selectedTool === 'circle') {
+          const radius = Math.sqrt(Math.pow(offsetX - startX.current, 2) + Math.pow(offsetY - startY.current, 2));
+          canvasContext.arc(startX.current, startY.current, radius, 0, 2 * Math.PI);
+          canvasContext.stroke();
+        } else if (selectedTool === 'line') {
+          canvasContext.lineTo(offsetX, offsetY);
+          canvasContext.stroke();
+        } else if (selectedTool === 'fill') {
+          canvasContext.fill();
+        }
+      }
       setDrawingHistory(prev => [...prev, canvasRef.current!.toDataURL()]);
       setCurrentPath([]);
     }
@@ -123,6 +143,10 @@ const Whiteboard = () => {
 
   const handleColorChange = (color: string) => {
     setDrawingColor(color);
+    if (canvasContext) {
+      canvasContext.strokeStyle = color;
+      canvasContext.fillStyle = color;
+    }
   };
 
   return (
@@ -135,7 +159,7 @@ const Whiteboard = () => {
           <RectangleVertical className="h-5 w-5" />
         </Button>
         <Button variant={selectedTool === 'circle' ? 'default' : 'outline'} onClick={() => handleToolChange('circle')}>
-          <Circle className="h-5 w-5" />
+          <CircleIcon className="h-5 w-5" />
         </Button>
         <Button variant={selectedTool === 'line' ? 'default' : 'outline'} onClick={() => handleToolChange('line')}>
            <svg
@@ -155,6 +179,9 @@ const Whiteboard = () => {
         </Button>
         <Button variant={selectedTool === 'eraser' ? 'default' : 'outline'} onClick={() => handleToolChange('eraser')}>
           <Eraser className="h-5 w-5" />
+        </Button>
+        <Button variant={selectedTool === 'fill' ? 'default' : 'outline'} onClick={() => handleToolChange('fill')}>
+          Fill
         </Button>
         <input
           type="range"
@@ -218,7 +245,7 @@ const Whiteboard = () => {
         style={{ background: 'white' }}
         className="bg-background cursor-pointer"
         onMouseDown={startDrawing}
-        onMouseMove={draw}
+        onMouseMove={drawing ? draw : null}
         onMouseUp={endDrawing}
         onMouseLeave={endDrawing}
       />
